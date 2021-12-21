@@ -1,0 +1,244 @@
+---
+title: "HW08"
+author: "Jiawei Hao, hjiawei"
+date: "Due 11/11/2021 at 11:59pm EST"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(320930033)
+library(tidyverse)
+library(boot)
+```
+
+When working on your assignment, make sure that `cancer_cell_biopsy.csv` is in the same directory as this file and set the working directory to the file's location (in the Session menu.) 
+
+## Question 1 (5 pts)
+
+The following data come from [a study of breast cancer biopsies](http://mlr.cs.umass.edu/ml/datasets/Breast+Cancer+Wisconsin+%28Diagnostic%29). 
+```{r}
+cancer <- read.csv("cancer_cell_biopsy.csv", header = FALSE)
+col_base <- c("radius",
+              "texture",
+              "perimeter",
+              "area",
+              "smoothness",
+              "compactness",
+              "concavity",
+              "concave_points",
+              "symmetry",
+              "fractal_dimension")
+
+cols <- c(paste0(col_base, "_mean"), paste0(col_base, "_sd"), paste0(col_base, "_worst"))
+
+colnames(cancer) <- c("ID", "Diagnosis", cols)
+
+## The current diagnosis is either "B" or "M". We'll turn this into a logical/boolean so it is a little easier to work with in R.
+cancer <- mutate(cancer, benign = Diagnosis == "B")
+```
+
+### Part (a) (2 pts)
+
+Let's begin our investigation by investigating whether benign (not harmful) and malignant (harmful) tumors differ in size (radius). We can see that benign tumors tend to be smaller than malignant tumors:
+
+```{r}
+ggplot(cancer, aes(x = radius_mean, color = benign, fill = benign)) + geom_density(alpha = 0.5)
+```
+
+Use a stratified bootstrap to generate a 95% confidence interval for the difference of means for the benign and malignant radius measurements. Interpret what this confidence interval tells us about the distributions of benign and malignant tumors? Particularly, does this interval include zero? What would including zero indicate?
+
+```{r}
+mean_diff <- function(x, index){
+  xstar <- x[index, ]
+  mean(xstar$radius_mean[xstar$Diagnosis == "M"]) - mean(xstar$radius_mean[xstar$Diagnosis == "B"])
+}
+
+cancer.boot <- boot(cancer, mean_diff, R = 1000)
+(diff.conf <- boot.ci(cancer.boot, type = "basic"))
+```  
+**Answer**: The confidence interval tells us that malignant tumor is larger than benign tumor on average. This interval does not include 0. Interval including 0 would indicate that two types of tumor are similar in size.  
+
+
+### Part (b) (1 pt)
+
+Suppose you were going to classify new tumors as either benign or malignant based on the radius of biopsy. 
+
+If the radius is below some value, $c$, you classify it as benign
+```{r}
+is_benign <- function(radius, cutoff)  {
+  radius < cutoff 
+}
+```
+
+Suppose we pay a cost of 1 if we misclassify a benign tumor as malignant, but pay a cost of 3 if we misclassify a malignant tumor as benign. Complete the following function that will compute the **average loss for the entire sample** for a given cutoff value.
+```{r}
+candidate_cutoffs <- seq(10, 20, length.out = 20)
+loss <- map_dbl(candidate_cutoffs, function(cut) {
+  classifications <- is_benign(cancer$radius_mean, cut)
+  
+  loss_amount <- 0
+  for(i in 1:length(classifications)){
+    if(classifications[i] == TRUE & cancer$Diagnosis[i] == "M"){
+      loss_amount <- loss_amount + 3
+    }
+    if(classifications[i] == FALSE & cancer$Diagnosis[i] == "B"){
+      loss_amount <- loss_amount + 1
+    }
+  }
+  return(loss_amount)
+})
+## plot(candidate_cutoffs, loss, type = 'l') # Optional: plot the losses
+(best_cut <- candidate_cutoffs[which.min(loss)])
+(average_loss <- min(loss))
+```
+
+Report the cutoff value and average loss value. Do you think this value would be good a estimate of the average loss you would pay on a new sample? Why or why not?
+
+**Answer**: This loss value would not be a good estimate of the average loss I would pay on a new sample because a new sample may have different data distributions that has a different best cutoff value.  
+
+### Part (c) (2 pts)
+
+Instead of using the entire sample to estimate out of sample prediction error, we will implement cross validation to estimate out of sample error when we pick a cutoff value in the style of part (b). Your CV implementation should
+
+- use 500 replications
+- each replication split the data into a training and test set
+- using the training set, select a cut off value
+- using the test set, estimate average prediction error
+
+Taking the mean of the 500 average loss values, estimate the out of sample prediction error. Compare these results to part (b). 
+
+```{r}
+k <- 500
+half_index <- round(length(cancer[,1]) / 2)
+
+x <- replicate(k, {
+  rand.order <- sample.int(569)
+  train.idx <- rand.order[1:half_index]
+  test.idx <- rand.order[(half_index + 1):569]
+  
+  loss_func <- function(cut) {
+  classifications <- is_benign(cancer$radius_mean[train.idx], cut)
+  
+  loss_amount <- 0
+  for(i in 1:length(classifications)){
+    if(classifications[i] == TRUE & cancer$Diagnosis[i] == "M"){
+      loss_amount <- loss_amount + 3
+    }
+    if(classifications[i] == FALSE & cancer$Diagnosis[i] == "B"){
+      loss_amount <- loss_amount + 1
+    }
+  }
+  return(loss_amount)
+  }
+  loss1 <- map_dbl(candidate_cutoffs, loss_func)
+  
+  cutoff <- candidate_cutoffs[which.min(loss1)]
+ 
+  loss_test <- map_dbl(cancer$radius_mean[test.idx], function(err){
+    loss <- 0
+    if(err < cutoff & cancer$Diagnosis[err] == "M"){
+      loss <- loss + 3
+    }
+    if(err > cutoff & cancer$Diagnosis[err] == "B"){
+      loss <- loss + 1
+    }
+    return(loss)
+  })
+  test_loss <- sum(loss_test)
+})
+
+(average_sample_loss <- mean(x))
+
+(pred_error <- average_sample_loss - average_loss)
+```  
+
+## Question 2 (5 pts)
+
+The Gini coefficient is a measure of "inequality" of a distribution, as expressed as the expected absolute difference between two randomly selected members of a population. Formally,
+
+$$G = \frac{1}{2\mu} \int_{-\infty}^\infty \int_{-\infty}^\infty |x - y| f(x) f(y) \, dx \, dy$$
+
+In a distribution with only one possible value $P(X = a) = 1$ for some $a$, the Gini coefficient is zero. When a very small proportion of variables have very large values relative to the remainder of the population, the Gini coefficient approaches 1.
+
+### Part (a) (1 pt)
+
+Suppose $X$ is a continuous random variable (i.e., $P(X_i = X_j) = 0$ for any sample), a natural estimator of $G$ uses the **empirical mass function**  $\hat f(x) = 1/n \sum_{i=1}^n I(X_i = x)$ in place of $f$, to get
+$$\hat G = \frac{1}{2 \bar X} \sum_{i=1}^n \sum_{j = 1}^n |X_i - X_j| \frac{1}{n} \frac{1}{n} = \frac{1}{2 \bar X n^2} \sum_{i=1}^n \sum_{j = 1}^n |X_i - X_j|$$
+Write a function to compute $\hat G$. Verify your solution on the following sample,
+```{r}
+v <- c(1.21889696917952, 0.0794705920852721, 0.239628585986793, 1.31094594481857, 
+0.946306612446215, 0.18770645884797, 0.0990762918207918, 0.899883037391019, 
+1.11378922029854, 1.14929740592362)
+```
+```{r}
+G_hat <- function(i, j){
+  sample_length <- length(i)
+  sample_mean <- mean(i)
+  
+  individual <- numeric(sample_length^2)
+  index <- 1
+  for (a in 1:sample_length){
+    for(b in 1:sample_length){
+      individual[index] <- abs(i[a] - j[b])
+      index <- index + 1
+    }
+  }
+  return(sum(individual)/(2 * sample_mean * length(individual)))
+}
+
+G_hat(v,v)
+
+```
+
+### Part (b) (1 pt)
+
+Implement a jackknife variance estimator for the variance of the statistic $\hat G$:
+
+$$v = \frac{n - 1}{n} \sum_{i=1}^n (\hat G_i - \hat G)^2$$
+
+where $\hat G_i$ applies the Gini coefficient estimator to the sample with **observation $i$ removed**.
+
+You may verify the correct answer is `0.01151351`.
+
+```{r}
+v.length <- length(v)
+G_hat_sqaures <- numeric(v.length)
+
+for (i in 1:v.length){
+  G_hat_sqaures[i] <- (G_hat(v[-i],v[-i]) - G_hat(v,v))^2
+}
+
+  
+(v.length - 1) / (v.length) * sum(G_hat_sqaures)
+
+```
+
+### Part (c) (2 pt)
+
+Read the paper "A Method to Calculate the Jackknife Variance Estimator for the Gini Coefficient." Implement the version of the jackknife variance estimator given in that paper using the re-expression of $\hat G_i$ given equation (9) on page 3.
+
+Verify your solution by comparing it to the answer you get in (b).
+
+#### Clarifications
+
+On the whole, I like the authors' explanation of their method, but I noticed several points that require clarification.
+
+- The authors are never quite explicit, but they assume that all the data is sorted from low to high. You can use the `sort` function to ensure this holds.
+- The authors call $r_i$ the "income rank" of the $i$th observation. After sorting your data, $r_i = i$. In R terms, `y <- sort(x) ; r <- 1:length(y)`.
+- You may find the following functions useful: `sum`, `rev` (reverses a vector), and `cumsum` (provides a cumulative sum of a vector). In particular, when computing the terms $K_i$.
+- The expression in Equation (9) requires that you have a term $K_{n + 1} = 0$. After you create your $K$ vector, you can then update it to `K <- c(K, 0)`.
+- Karagiannis and Kovacevic emphasize that their method only requires two passes the through the data; while that is interesting, you may make as may passes through the data as you wish (for example by calling `mean` or `sum`), but you should never compute all the pairwise differences. We are mostly interested in the fact that we can sort the data using approximately $n \log(n)$ operations instead of the much larger $n^3$ operations needed to compute all $n^2$ differences for each of $n$ values $\hat G_i$.
+
+### Part (d) (1 pt)
+
+```{r, eval = FALSE}
+load("sf_2019_compensation.rda")
+ggplot(sf_2019_compensation, aes(x = Total.Salary)) + geom_density()
+```
+
+Here is a sample of 1000 employees from the City of San Francisco. Among other variables, we have information on the total salary disbursed in 2019. Create Studentized bootstrap 95% confidence intervals for the Gini coefficient for total salary for all employees of the City of San Francisco using the jackknife variance estimator from part (c). You may carefully follow (i.e., copy and paste) the examples from the slides. Remember to return two things in your statistic function: the value of the Gini coefficient the bootstrap sample and the estimated variance for that bootstrap sample (using the jackknife from (c)). Use 1000 bootstrap replications.
+
+Comment on the intervals. Would you exclude the hypothesis that the true Gini coefficient was 0.2?
+
+
