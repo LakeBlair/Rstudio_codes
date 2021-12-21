@@ -1,0 +1,137 @@
+---
+title: "HW 10"
+author: "Jiawei Hao, hjiawei"
+date: "2021-12-05"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(29003021)
+library(tidyverse)
+```
+
+
+## Question (7 pts)
+
+Recall the Beta distribution, which is defined for $\theta \in (0, 1)$ with parameters $\alpha$ and $\beta$, has a density proportional to:
+$$\theta^{\alpha - 1} (1 - \theta)^{\beta - 1}$$
+
+The Dirichlet distribution generalizes the the Beta distribution for $k$ such $\theta_i$ values such that $\sum_{i=1}^k \theta_k = 1$. It has $k$ parameters, which we will label $\delta_i$ and is proportional to:
+$$\theta_1^{\delta_1 - 1} \theta_2^{\delta_2 - 1} \cdots \theta_k^{\delta_k - 1}$$
+
+In particular, let us consider the a Dirichlet distribution with three components, which we can also write as:
+$$\theta_1^{\delta_1 - 1} \theta_2^{\delta_2 - 1} (1 - \theta_1 - \theta_2)^{\delta_3 - 1}$$
+
+
+Suppose that $X_1$ counts the number observations of type 1, $X_2$ counts the numbers of observatinos of type 2, and $X_3$ counts the number of observations of type 3 in a sample (e.g., red, blue, and green cars observed on the highway). We will treat $n = X_1 + X_2 + X_3$ as fixed, so that our data have a **multinomial** distribution, which generalizes the binomial distribution. As with the binomial distribution, we can notice that $X_3 = n - X_1 - X_2$, and so is redundant. 
+
+The probability mass function for a multinomial distribution is proporational to
+$$f(x_1, x_2 \, |, \theta_1, \theta_2) \propto \theta_1^{x_1} \theta_2^{x_2} (1 - \theta_1 - \theta_2)^{n - x_1 - x_2}$$
+
+### Part (a) (2 pts)
+
+Consider the Bayesian model:
+\[
+\begin{aligned}
+ (\theta_1, \theta_2) &\sim \text{Dirichlet}(\delta_1, \delta_2, \delta_3)\\ 
+ (X_1, X_2) &\sim \text{Multinomial}(n, \theta_1, \theta_2)
+\end{aligned}
+\]
+
+Show that the posterior distribution $\pi(\theta_1, \theta_2 \, | \, x_1, x_2)$ has a Dirichlet distribution with parameters $(x_1 + \delta_1, x_2 + \delta_2, n - x_1 - x_2 + \delta_3)$. (Hint: find something that is proportional to the posterior distribuiton and argue that the only possible normalizing constant must lead to a Dirichlet distribution with the given parameters.)
+
+**Answer**: Using Bayes Rule, the posterior distribution $\pi(\theta_1, \theta_2 \, | \, x_1, x_2) = \frac{f(x_1, x_2 \, |, \theta_1, \theta_2)p(\theta_1, \theta_2)}{\int f(x_1, x_2 \, |, \theta_1, \theta_2)p(\theta_1, \theta_2) \partial \theta}$.  
+The denominator integrated over $\theta$ and therefore has no $\theta$ parameter, thus we can get rid off it to get $\pi(\theta_1, \theta_2 \, | \, x_1, x_2) \propto {f(x_1, x_2 \, |, \theta_1, \theta_2)p(\theta_1, \theta_2)}$.  
+According to the question, we already know $f(x_1, x_2 \, |, \theta_1, \theta_2) \propto \theta_1^{x_1} \theta_2^{x_2} (1 - \theta_1 - \theta_2)^{n - x_1 - x_2}$. Also since prior distribution $p(\theta_1, \theta_2)$ is a Dirichlet distribution and $p(\theta_1, \theta_2) = \theta_1^{\delta_1 - 1} \theta_2^{\delta_2 - 1} (1 - \theta_1 - \theta_2)^{\delta_3 - 1}$. Therefore, $\pi(\theta_1, \theta_2 \, | \, x_1, x_2) \propto {f(x_1, x_2 \, |, \theta_1, \theta_2)p(\theta_1, \theta_2)} = \theta_1^{x_1} \theta_2^{x_2} (1 - \theta_1 - \theta_2)^{n - x_1 - x_2} \times \theta_1^{\delta_1 - 1} \theta_2^{\delta_2 - 1} (1 - \theta_1 - \theta_2)^{\delta_3 - 1} = \theta_1^{x_1+\delta_1 - 1} \theta_2^{x_2+\delta_2 - 1} (1 - \theta_1 - \theta_2)^{n-x_1-x_2+\delta_3 - 1}$.  
+Therefore, the posterior distribution $\pi(\theta_1, \theta_2 \, | \, x_1, x_2)$ has a Dirichlet distribution with parameters $(x_1 + \delta_1, x_2 + \delta_2, n - x_1 - x_2 + \delta_3)$.  
+
+
+### Part (b) (2 pts)
+
+Find the **full conditional posteriors** (up to a normalizing constant) for $\theta_1$ and $\theta_2$. Argue that
+$$\theta_1 \, | \, \theta_2, x_1, x_2  \sim (1 - \theta_2) \, \text{Beta}(x_1 + \delta_1, n - x_1 - x_2 + \delta_3)$$ 
+and
+$$\theta_2 \, | \, \theta_1, x_1, x_2 \sim (1 - \theta_1) \, \text{Beta}(x_2 + \delta_2, n - x_1 - x_2 + \delta_3)$$ 
+Hints:
+
+- If $X = a Y$, $a > 0$, and $Y$ has density $f(y)$, then $X$ has density $f(x / a) / a$
+- As we saw in class, be ruthless in dropping terms that don't pertain to the main parameter as long as you can maintain proportionality. E.g.
+$$f(x \, | \, y) \propto y!^y \frac{x y^2}{\sin(y)} \propto x$$
+- You may find it helpful to write $a_1 = x_1 + \delta_1$, $a_2 = x_2 + \delta_2$, and $b = n - x_1 - x_2 + \delta_3$ and do your proof using those as the parameters. 
+
+**Answer**: $\pi(\theta_1,| \theta_2 \, \, x_1, x_2, \delta) = \frac{\pi(\theta_1, \theta_2 \, | \, x_1, x_2)}{\pi(\theta_2 \mid x_1, x_2, \delta)} \propto \pi(\theta_1, \theta_2 \mid x_1, x_2, \delta)$. In 1(a), we found $\pi(\theta_1, \theta_2 \mid x_1, x_2, \delta)=\theta_1^{a_1 - 1} \theta_2^{a_2 - 1} (1 - \theta_1 - \theta_2)^{b - 1}$. Since we only care about $\theta_1$, we can eliminate term to have $\pi(\theta_1,| \theta_2 \, \, x_1, x_2, \delta) \propto \theta_1^{a_1 - 1}(1 - \theta_1 - \theta_2)^{b - 1}$.  
+According to hint1, assume $X=\pi(\theta_1,| \theta_2 \, \, x_1, x_2, \delta)$ and $a=(1-\theta_2)$ and $Y=\text{Beta}(x_1 + \delta_1, n - x_1 - x_2 + \delta_3)=f(y)=\theta_1^{a_1 - 1}(1 - \theta_1 - \theta_2)^{b - 1}$. Then $X = f(x/a)/a = \frac{ (\frac{\theta_1}{1-\theta_2})^{a_1 - 1}(1 - \frac{\theta_1}{1-\theta_2})^{b - 1}}{1-\theta_2}=\frac{(\frac{\theta_1}{1-\theta_2})^{a_1 - 1}( \frac{1-\theta_2-\theta_1}{1-\theta_2})^{b - 1}}{1-\theta_2} \propto \theta_1^{a_1 - 1}(1 - \theta_1 - \theta_2)^{b - 1}$.  
+Thus, $\theta_1 \, | \, \theta_2, x_1, x_2  \sim (1 - \theta_2) \, \text{Beta}(x_1 + \delta_1, n - x_1 - x_2 + \delta_3)$  
+
+Similarly, we can show $\pi(\theta_2,| \theta_1 \, \, x_1, x_2, \delta) \propto \theta_2^{a_2 - 1}(1 - \theta_1 - \theta_2)^{b - 1}$.  
+Then, assume $X=\pi(\theta_2,| \theta_1 \, \, x_1, x_2, \delta)$ and $a=(1-\theta_1)$ and $Y=\text{Beta}(x_2 + \delta_2, n - x_1 - x_2 + \delta_3)=f(y)=\theta_2^{a_2 - 1}(1 - \theta_1 - \theta_2)^{b - 1}$. Then $X = f(x/a)/a = \frac{(\frac{\theta_2}{1-\theta_1})^{a_2 - 1}(1 - \frac{\theta_2}{1-\theta_1})^{b - 1}}{1-\theta_1}=\frac{(\frac{\theta_2}{1-\theta_1})^{a_2 - 1}(\frac{1-\theta_1-\theta_2}{1-\theta_1})^{b - 1}}{1-\theta_1} \propto \theta_2^{a_2 - 1}(1 - \theta_1 - \theta_2)^{b - 1}$.  
+Thus, $\theta_2 \, | \, \theta_1, x_1, x_2  \sim (1 - \theta_1) \, \text{Beta}(x_2 + \delta_2, n - x_1 - x_2 + \delta_3)$
+
+### Part (c) (3 pts)
+
+A recent poll by Morning Consult/Politico asked voters their opinion on whether the Unite States Congress should raise the federal minimum wage.
+
+```{r}
+x_1 <- 806 # Congress should raise to $15/hr
+x_2 <- 435 # Congress should not raise the minium wage
+x_3 <- 586 # Congress should raise to $11/hr
+n <- x_1 + x_2 + x_3
+```
+(I have excluded the 8% of the sample with no opinion)
+
+Modeling these results as multinomial, we will investigate the proportions of registered voters holding opinions about the federal minimum wage.
+
+Use the result from part (b) to implement a Gibbs sampler for $(\theta_1, \theta_2 \, \theta_3 | \, x_1, x_2)$. Let $\delta_1 = \delta_2 = \delta_3 = 1$.
+
+Create a chain of length 5000. Using the last 2000 iterations from the chain give estimates of $\theta_1$, $\theta_2$ and $\theta_3$. Also provide 95% credible intervals for each of the parameters (quantiles of the posterior marginal distributions).
+
+Estimate the probability that the \$15/hour wage is twice as popular no increase at all (i.e., $P(\theta_1 / \theta_2 > 2)$).
+
+```{r}
+k <- 5000
+
+#posterior distributions
+post_1 <- function(theta1){
+  (1 - theta1) * rbeta(1, x_1 + 1, n - x_1 - x_2 + 1)
+}
+post_2 <- function(theta2){
+  (1 - theta2) * rbeta(1, x_2 + 1, n - x_1 - x_2 + 1)
+}
+
+#initial condition setup
+gibbs <- matrix(0, ncol = k, nrow = 3)
+gibbs[1,1] = runif(1)
+gibbs[2,1] = runif(1, min = gibbs[1,1], max = 1)
+gibbs[3,1] = 1 - gibbs[1,1] - gibbs[2,1]
+
+#build chains
+for(i in 2:k){
+  gibbs[1,i] <- post_1(gibbs[2,i-1])
+  gibbs[2,i] <- post_2(gibbs[1,i])
+  gibbs[3,i] <- (1 - gibbs[1,i] - gibbs[2,i])
+}
+
+#burn gibbs
+burn_gibbs1 <- gibbs[1,3000:k]
+burn_gibbs2 <- gibbs[2,3000:k]
+burn_gibbs3 <- gibbs[3,3000:k]
+
+#thetas
+(theta1 <- mean(burn_gibbs1))
+(theta2 <- mean(burn_gibbs2))
+(theta3 <- mean(burn_gibbs3))
+
+#interval
+quantile(gibbs[1,], c(0.025,0.975))
+quantile(gibbs[2,], c(0.025,0.975))
+quantile(gibbs[3,], c(0.025,0.975))
+
+mean(gibbs[1,2:k]/gibbs[2,2:k] > 2)
+```
+
+## Question 2 (3 pt)
+
+Read the paper "Less than 2 degree C warming by 2100 unlikely." Briefly summarize the results (question, data, analysis). Carefully, read the section "Methods: Model Estimation". Explain how they used their posterior distribution to generate the predictions they used in the paper. 
+
+**Answer**: This paper examines the ways of socioeconomic pattern and its impact on increase in temperature by the year of 2021. Socioeconomic pattern is divided into smaller observations according to the authors: population growth, economic growth, GDP per capital, etc. To certain degree, author explores how the changes in these factors affect the change in carbon emissions and rise in temperature. To analyze the pattern, author presented data in CO2 intensity, Yearly CO2 emissions, and total CO2 emissions and plot them against RCPs' emission models. According to authors, they did a decent job capturing the trend of carbon emissions, including the middle two RCPs' (4.5 and 6.0) emission prediction. The method they used are interesting as well. They used decades of emission data (from 1960s to 2000s) to predict the emission growth and received reasonable well results as the prediction model catches the emission trend for present days within its 90% interval. Though the predictions can diverge when they predict a time period far away (2100). As a result, they found that population growth has little correlation to CO2 emission, whereas GDP per capital and carbon intensity play significant roles in CO2 emissions. They used posterior distribution to generate predictions. Specifically, they sampled model parameters from e posterior distribution by choosing the parameters from one iteration of the MCMC algorithm chosen at random. Then, for each set of model parameters sampled, they sampled model random errors from their conditional distribution given the parameters sampled. They then projected the future trajectory forward using the model, the sampled model parameters, and the sampled model random errors. These steps help them generate many prediction trajectories and an interval is determined using quantiles of the resulting distribution.  
