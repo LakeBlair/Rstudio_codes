@@ -1,0 +1,198 @@
+---
+title: "Homework 9"
+author: "Jiawei Hao, hjiawei"
+date: "Due 2021-11-21 at 11:59pm"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(7792100)
+library(tidyverse)
+```
+
+## Question 1 (3 points)
+
+Let's return to the cancer biopsy data from last week's homework.
+
+```{r echo = FALSE}
+cancer <- read.csv("cancer_cell_biopsy.csv", header = FALSE)
+col_base <- c("radius",
+              "texture",
+              "perimeter",
+              "area",
+              "smoothness",
+              "compactness",
+              "concavity",
+              "concave_points",
+              "symmetry",
+              "fractal_dimension")
+
+cols <- c(paste0(col_base, "_mean"), paste0(col_base, "_sd"), paste0(col_base, "_worst"))
+
+colnames(cancer) <- c("ID", "Diagnosis", cols)
+```
+
+Suppose that we interested in using the radius of the cells in the biopsy to help us predict the fractal dimension (a measure of how "wiggly" the border is). This could be useful if fractal dimension provides useful diagnostic information, but is more costly to measure than radius. Predicting the fractal dimension from the radius could then be a particularly useful technique.
+
+In the following, let $X_i$ be `radius_mean` for each subject and let $Y_i$ be `fractal_dimension_mean` for each subject As we did with the bootstrap homework problems, suppose we assume that
+$$Y_i = \beta_0 + \beta_1 X_i + R_i$$
+$R_i$ is an unobserved, latent variable. We will assume that it is **independent of $X_i$**. 
+
+Note that $Y_i$ and $X_i$ are **independent** if and only if $\beta_1 = 0$.
+
+### Part (a) (1 pt)
+
+In class, we saw a permutation test that used the **correlation** between between $Y$ and $X$ to test the null hypothesis that $X$ and $Y$ were independent.
+
+Propose a **distribution free** version of of the correlation test and implement it to test the hypothesis that $\beta_1 = 0$ at the $\alpha = 0.05$ level. You may either find a 5% rejection region or compute the p-value and interpret the result. (Hint: Recall that we found a distribution free method (the Wilcoxon-Mann-Whitney test) by taking the ranks of the data and then performing a difference of means permutation test.)
+
+```{r}
+rank_w <- rank(cancer$radius_mean)
+rank_z <- rank(cancer$fractal_dimension_mean)
+observed_cor <- with(cancer, cor(rank_z, rank_w))
+
+null_cors <- replicate(1000, {
+  shuffled <- sample(rank_w)
+  cor(rank_z, shuffled)
+})
+
+(p_null <- 2 * min(mean(null_cors>=observed_cor), mean(null_cors<=observed_cor)))
+
+```  
+**Answer**: We got alpha equal to 0, which is smaller than $\alpha = 0.05$ level, so we reject null hypothesis that $\beta_1 = 0$.  
+
+
+### Part (b) (2 pts)
+
+If $\beta_1 \ne 0$, then lets try to find a confidence interval for it. Propose an adjustment function $h$ such that:
+$$Y_i' = h(Y_i, X_i, \beta_1)$$
+makes $Y_i'$ independent of $X_i$. 
+
+Propose such an adjustment and use the test from part (a) to construct a 95\% confidence interval for $\beta_1$. **Important**: One advantage of a distribution free method is that the distribution of the test statistic does not depend on the parameter $\beta_1$ (making it much more computationally efficient in many cases). Your method should compute the distribution for the test statistic **once** and then test each hypothesized $\beta_1$ value using that distribution.
+
+Here is a range of $\beta_1$ values to test. While these may look small in magnitude, they reflect the fact that `radius_mean` and `fractal_dimension_mean` are on very different scales. 
+```{r}
+betas <- seq(-0.001, 0.001, length.out = 1000) 
+
+test <- function(w,z){
+  cor_observed <- cor(w, z)
+  2*(min(mean(null_cors > cor_observed), mean(null_cors < cor_observed)))
+}
+
+ps <- sapply(betas, function(theta){
+  with(cancer, test(rank(cancer$radius_mean), rank(cancer$fractal_dimension_mean - theta * cancer$radius_mean)))
+})
+
+(ci95 <- range(betas[ps >= 0.05]))
+```
+
+
+## Question 2 (5 pts)
+
+Let's compare the Wilcoxon-Mann-Whitney (WMW) test to standard $t$-test. Throughout, feel free to use R's built in `wilcox.test` and `t.test` functions. 
+
+We will fix $n = m = 20$ throughout and vary the distributions of $X$ and $Y$ to see which test is more powerful and when.
+
+We will test the hypothesis $H_0: F = G$ vs. $H_1: F \ne G$. We will use $\alpha = 0.05$ for both testing Type I error and estimating power. Use at least 1000 Monte Carlo replications each of the questions.
+
+### Part (a) (1 pt)
+
+Use a Monte Carlo approach to asses the Type I error for both tests when $F = G = N(0, 2)$. Use `binom.test` to provide a 99% CI for the estimated Type I error when $\alpha = 0.05$.
+
+```{r}
+p_values_2a <- replicate(1000, {
+  dist.F <- rnorm(20, mean = 0, sd = 2)
+  dist.G <- rnorm(20, mean = 0, sd = 2)
+  return(c(wilcox.test(x = dist.F, y = dist.G)$p.value, t.test(dist.G, dist.F)$p.value))
+})
+#perform binom test on rejection number over total number 
+wmw_reject_2a <- p_values_2a[1,] < 0.05
+ttest_reject_2a <- p_values_2a[2,] < 0.05
+
+binom.test(sum(wmw_reject_2a), 1000, conf.level = 0.99)$conf.int
+binom.test(sum(ttest_reject_2a), 1000, conf.level = 0.99)$conf.int
+
+```
+
+### Part (b) (1 pt)
+
+Find the power of the WMW and the $t$-test when $F = N(0, 2)$ and $G = N(1, 2)$. Use `binom.test` to provide a 99% CI when $\alpha = 0.05$
+
+```{r}
+p_values_2b <- replicate(1000, {
+  dist.F <- rnorm(20, mean = 0, sd = 2)
+  dist.G <- rnorm(20, mean = 1, sd = 2)
+  return(c(wilcox.test(x = dist.F, y = dist.G)$p.value, t.test(dist.G, dist.F)$p.value))
+})
+
+wmw_reject <- p_values_2b[1,] < 0.05
+ttest_reject <- p_values_2b[2, ] < 0.05
+
+mean(wmw_reject)
+mean(ttest_reject)
+
+binom.test(sum(wmw_reject), 1000, conf.level = 0.99)$conf.int[1:2]
+binom.test(sum(ttest_reject), 1000, conf.level = 0.99)$conf.int[1:2]
+
+```  
+
+### Part (c) (1 pt)
+
+Use a Monte Carlo approach to asses the Type I error for both tests when $F = G = t(4)$ (a $t$-distribution with 4 degrees of freedom).  Use `binom.test` to provide a 99% CI for the estimated Type I error when $\alpha = 0.05$.
+
+```{r}
+p_values_2c <- replicate(1000, {
+  dist.F <- rt(n = 20, df = 4)
+  dist.G <- rt(n = 20, df = 4)
+  return(c(wilcox.test(x = dist.F, y = dist.G)$p.value, t.test(dist.G, dist.F)$p.value))
+})
+
+wmw_reject_2c <- p_values_2c[1,] < 0.05
+ttest_reject_2c <- p_values_2c[2,] < 0.05
+
+binom.test(sum(wmw_reject_2c), 1000, conf.level = 0.99)$conf.int
+binom.test(sum(ttest_reject_2c), 1000, conf.level = 0.99)$conf.int
+
+```
+
+### Part (d) (1 pt)
+
+Find the power of the WMW and the $t$-test when $F = t(4)$ and $G = t(4) + 1$. Use `binom.test` to provide a 99% CI when $\alpha = 0.05$
+
+```{r}
+p_values_2d <- replicate(1000, {
+  dist.F <- rt(n = 20, df = 4)
+  dist.G <- rt(n = 20, df = 4) + 1
+  return(c(wilcox.test(x = dist.F, y = dist.G)$p.value, t.test(dist.G, dist.F)$p.value))
+})
+
+wmw_reject_2d <- p_values_2d[1,] < 0.05
+ttest_reject_2d <- p_values_2d[2, ] < 0.05
+
+mean(wmw_reject_2d)
+mean(ttest_reject_2d)
+
+binom.test(sum(wmw_reject_2d), 1000, conf.level = 0.99)$conf.int[1:2]
+binom.test(sum(ttest_reject_2d), 1000, conf.level = 0.99)$conf.int[1:2]
+
+```  
+
+### Part (e) (1 pt)
+
+Comment on the results from (a) - (d). If you wanted to perform a two sample test but weren't 100% sure of the distribution, which test would you reach for? Comment on the assumptions and trade-offs of the methods.
+
+**Answer**: From the result we can see:  
+For normal RV, WMW method has a relatively smaller confidence interval on estimate type I error but its power is smaller compare to t.test by a small margin.  
+For t distribution, WMW also has a relative smaller confidence interval on estimate type I error while its power is larger than the t.test.  
+Personally I would use WMW for two unknown samples. Because the differences between the power of the two tests is not large while WMW generally seem to have a relatively smaller confidence interval for the value we seek for, which can provide a better estimation.  
+WMW test assumes data are i.i.d and they come from the same population. The t test assumes data are i.i.d, follows normal distribution when plotted, and uses relative large sample size.  
+Trade-offs of a t test include when sample is small or when data does not follow normal distribution, the test result can be inaccurate. For WMW test, it doesn't explain why two samples have a difference and the calculation can be length; it also works less ideal when data not independent from each other or when data doesn't follow the same distribution.  
+
+## Question 3 (2 pts)
+
+In the paper "Serial dependence in visual perception," read the introduction, the first results section ("Serial dependence in orientation perception"), Fig 2, and the Experiment 1 section of the "Online Methods" supplement (p. 7). Carefully read the *Analysis* section of Experiment 1 portion of Online Methods and understand the statistical tests used in making the claim that serial autocorrelation is present in visual processing. Write a paragraph explaining the main question of the research, briefly summarizing the experiment described in the "Serial dependence in orientation perception", and explain the use of permutation tests in the analysis of Experiment 1. Pay careful attention to (a) what variables were permuted and (b) what was the test statistic used. 
+
+**Answer**: The paper wants to explore the question that how human's visual system captures the events around us to present the continuity of the physical world. This question is relevant because while physical world surround us may be generally stable, it is important to know how to predict the events that may or may not occur based on our prior and present knowledge about things around us.  
+To explore this question, author conducted a survey to examine the concept of serial dependence in perception. More specifically, subjects with normal vision are asked to response to the orientation of Gabor stimuli given a short period of time. The subject will response to many trials of Gabor stimuli for each around. In each trial, depends on method trial sequences are generated, the Gabor is oriented either clockwise or counterclockwise by a small margin. The result shows that the way subject react to the orientation of each Gabor is strongly correlated to the orientation of the previous Gabor seen.  
+Permutation tests are used when refitting first derivative of a Gaussian curve for 100000 times, shuffling the data labels, relative orientation of the previous trial (variable permuted), on each iteration. As such, author generated a null distribution of amplitude of serial dependence (test statistic) against measured amplitude of serial dependence.  
