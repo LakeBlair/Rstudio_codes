@@ -1,0 +1,165 @@
+---
+title: "STATS 406, Homework 02"
+author: "Jiawei Hao, hjiawei"
+date: "Due 2021-09-14 11:59pm" 
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+## Problem 1 (4 pts)
+
+Consider a random variable $X$ with support $[0, \infty)$ that has the density function
+$$f(x) = a 2^{-\theta x}$$
+where $a$ is some positive constant and $\theta > 0$ is a parameter of the distribution.
+
+### Part (a) (1 pt)
+Find the constant $a$ that makes density function $f$ a proper density function (i.e., $f(x) \ge 0, x \in [0, \infty)$ and obeys the law of total probability).
+
+Hint: Recall that $\exp(\log(y)) = y$, where $\log$ is the natural logarithm.
+\[
+
+\begin{align}
+
+F(x) &=\int_{0}^{\infty} a 2^{-\theta x} dx \\
+     &= a\int_{0}^{\infty} (2^{-\theta})^{x} dx \\
+     &= a\frac{-(2^{-\theta})^{-x}}{\ln(|2^{\theta}|)} |_{0}^{\infty} \\
+     &= \frac{a}{\ln(2^{\theta})} \\
+     &= 1 \\
+     Thus, a = \ln(2^{\theta})
+    
+\end{align}
+
+\]
+### Part (b) (1 pt)
+
+Find a closed form expression for CDF of the distribution:
+$$F(t) = \int_0^t f(x) \, dx$$
+
+Implement the the CDF as an R function:
+
+```{r}
+F <- function(t, theta) {
+  theta*log(2)*((-(2^theta)^(-t)+1)/(log(2^theta)))
+}
+```
+
+When you have implemented `F` above, remove `eval = FALSE` to demonstrate your CDF with $\theta = 1/4$.
+```{r}
+curve(F(x, theta = 1/4), from = 0, to = 30)
+```
+ 
+
+### Part (c) (1 pt)
+
+For data that are **independent, identically distributed** with density $f$, the likelihood function is given by
+$$L(\theta) = \prod_{i=1}^n f(x_i ; \theta)$$
+
+Here is a vector of $x_i$ values that represent a sample from $f$. 
+```{r}
+x <- c(2.04633020390363, 19.7162495956649, 4.13080370648129, 1.81704122764094, 
+1.95187369091209, 1.33550786159157, 2.51227117915184, 0.845621829601402, 
+0.294167520262539, 1.94874477069653, 0.668953039617229, 9.19826053515684, 
+0.161521415421586, 8.76538255582832, 9.05718407093848, 0.563933559592626, 
+5.40269171511784, 7.4842100539579, 5.70493764112286, 7.94079576949872)
+```
+
+```{r}
+likelihood <- function(theta) {
+  ## you can refer to the variable "x" directly in this function
+  
+  return(0) 
+}
+```
+
+Plot the likelihood for $\theta \in [0, 2]$:
+
+```{r}
+## the "x" below is actually our theta parameter
+## the curve function is a special function that needs an expression involving "x"
+## The "Vectorize" function allows us to take many theta values simultaneously
+curve(Vectorize(likelihood)(x), from = 0, to  = 2)
+```
+
+What do you notice?
+
+### Part (d) (1 pt)
+
+What is the **maximum likelihood estimator** for $\theta$? Justify your answer formally.
+
+
+## Problem 2 (2 pt)
+
+For continuous random variables $X$ and $Y$ with density $f(x, y)$, recall the **conditional expectation** of $Y$ given $X = x$ is given by:
+
+$$E(Y \mid X = x) = \int_{-\infty}^\infty y \, f(y \mid x) \, dy = h(x)$$
+
+Prove the *law of iterated expectation*:
+
+$$E(E(Y \mid X)) = E(Y)$$
+
+or equivalently,
+$$E(h(X)) = E(Y)$$
+Hint: Because density functions are **non-negative**, you may exchange the order of integration in $\int_{-\infty}^\infty \int_{-\infty}^\infty f(x,y) \, dx dy = \int_{-\infty}^\infty \int_{-\infty}^\infty f(x,y) \, dy dx$ (Tonelli's theorem).
+
+Proof:
+\[
+
+\begin{align}
+
+E(E(Y|X))&=\int_{-\infty}^{\infty}E(Y|X)f(x)dx \\
+         &=\int_{-\infty}^{\infty}(\int_{-\infty}^{\infty}yf(Y|X)dy)f(x)dx \\
+         &=\int_{-\infty}^{\infty}y(\int_{-\infty}^{\infty}f(Y|X))f(x)dxdy \\
+         &=\int_{-\infty}^{\infty}y(\int_{-\infty}^{\infty}f(x,y))dxdy \\
+         &=\int_{-\infty}^{\infty}yf(y)dy \\
+         &=E(Y)
+
+
+\end{align}
+
+\]
+
+
+## Problem 3 (4 pts)
+
+For this problem, we'll continue to use the Spotify tracks data we met last week.
+
+```{r}
+load("tracks.rda")
+```
+
+You may wish to skim the chapter on visualization in [R for Data Science](https://r4ds.had.co.nz/data-visualisation.html).
+
+### Part a (1 pt)
+
+We can create a basic scatter plot of two variables using the following code:
+```{r}
+ggplot(tracks, aes(x = danceability, y = loudness)) + geom_point()
+```
+
+The `x` and `y` aesthetics are not our only choice. One at a time, create new two plots using `size` and `color` connected to the `energy` column in the data set. Which of these plots do you prefer, and why?
+
+### Part b (1 pt)
+
+Sometimes it is more useful to replace the entire data set with a smooth line that represents the data on average (we'll talk about how these lines are created later in the course).
+
+```{r}
+ggplot(tracks, aes(x = danceability, y = loudness)) + geom_smooth()
+```
+
+Here we see an upward trend in loudness as danceability approaches 0.5, at which point it levels off. 
+
+Does this hold for all musical keys? Use the `facet_wrap` function to create "small multiples" showing the relationship between loudness and danceability with each key.
+
+Do you notice any particular keys that differ from the overall pattern?
+
+### Part c (2 pts)
+
+Prepare a plot that displays interesting features from the tracks data of your choice. Give particular attention to how your plot uses coordinates, points, lines, shapes, and the visual variables of size, value, texture, color, orientation, and shape ([here's a chart showing the variables in action](https://www.axismaps.com/guide/general/visual-variables/)). You do not need to include all types of graphical variables in your plot. 
+
+Provide a brief discussion of the visual variables you use and what aspects of the data these variables communicate. Additionally, either draw conclusions or discuss questions generated from your plot. 
+
+
