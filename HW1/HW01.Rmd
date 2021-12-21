@@ -1,0 +1,251 @@
+---
+title: "STATS 406, Homework 01"
+author: "Jiawei Hao, hjiawei"
+date: "Due 2021-09-08 at 11:59pm"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Setup
+
+Make sure that you have the `tidyverse` and `ggplot2` packages installed. You can run the following in your terminal to make sure that these are up to date:
+
+```{r eval = FALSE}
+install.packages(c("tidyverse", "ggplot2"))
+```
+
+After they are installed, the following lines should work without error:
+```{r, results='hide', warning = FALSE, message = FALSE}
+library(tidyverse)
+library(ggplot2)
+```
+
+## Problem 1 (2 pts)
+
+### Part (a) (1 pt)
+
+The following block of text is adapted from the [Wikipedia page on R](https://en.wikipedia.org/wiki/R_(programming_language). If you look at the source code for this document (the .Rmd file), you will see that the text is in HTML format. Your job is to recreate the RMarkdown I used to create this formatting.
+
+- [Markdown basics](https://www.markdownguide.org/basic-syntax/) 
+- [RMarkdown additional details](http://rmarkdown.rstudio.com) 
+- The `Help > Cheatsheets > R Markdown Cheat Sheet` menu option
+* You may find it easiest to copy the text from the rendered HTML into this .Rmd file, and then perform the necessary formatting.
+* For the block of R code, you do not need to actually execute this code. (Use `eval = FALSE` in the chunk header)
+* The Mandelbrot image can be found at `https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Mandelbrot_Creation_Animation.gif/400px-Mandelbrot_Creation_Animation.gif`
+
+---
+
+## Mandelbrot set
+Short R code calculating [Mandelbrot set](https://en.wikipedia.org/wiki/Mandelbrot_set) through the first 20 iterations of equation $z=z^2+c$ plotted for different complex constants $c$. This example demonstrates:
+
+- use of **community-developed** external libraries (called packages), in this case caTools package   
+- handling of [complex numbers](https://en.wikipedia.org/wiki/Complex_numbers  
+- multidimensional arrays of numbers used as basic data type, see variables `C`, `Z` and `X`.  
+
+```{r, eval=FALSE}
+install.packages("caTools")  # install external package
+library(caTools)             # external package providing write.gif function
+jet.colors <- colorRampPalette(c("red", "blue", "#007FFF", "cyan", "#7FFF7F",
+                                 "yellow", "#FF7F00", "red", "#7F0000"))
+dx <- 1500                    # define width
+dy <- 1400                    # define height
+C  <- complex(real = rep(seq(-2.2, 1.0, length.out = dx), each = dy),
+              imag = rep(seq(-1.2, 1.2, length.out = dy), dx))
+C <- matrix(C, dy, dx)       # reshape as square matrix of complex numbers
+Z <- 0                       # initialize Z to zero
+X <- array(0, c(dy, dx, 20)) # initialize output 3D array
+for (k in 1:20) {            # loop with 20 iterations
+  Z <- Z^2 + C               # the central difference equation
+  X[, , k] <- exp(-abs(Z))   # capture results
+}
+write.gif(X, "Mandelbrot.gif", col = jet.colors, delay = 100)
+```
+![](https://upload.wikimedia.org/wikipedia/commons/thumb/a/a7/Mandelbrot_Creation_Animation.gif/400px-Mandelbrot_Creation_Animation.gif)
+---
+
+
+### Part (b) (1 pt)
+
+Section 2.3 of Statistical Computing with R (by Maria Rizzo) gives the Normal distribution probability density function. Recreate the definition using math notation in RMarkdown. [Cosma Shazili's reference](http://www.stat.cmu.edu/~cshalizi/rmarkdown/#math-in-r-markdown) is very helpful.
+
+\[
+\begin{eqnarray}
+  f(x) &= \frac{1}{\sqrt{2\pi}\sigma}exp\{-\frac{1}{2}(\frac{x-\mu}{\sigma})^2\}
+\end{eqnarray}
+\]
+
+## Problem 2 (4 pts)
+
+
+In this problem we will write three versions of functions to compute the (sample) mean and (sample) variance a numeric vector. 
+
+Sample mean is defined as
+$$\bar x = \frac{1}{n} \sum_{i = 1}^n x_i$$
+
+Sample variance is defined as 
+$$ S^2 =\frac{1}{n - 1} \sum_{i = 1}^n (x_i - \bar x)^2$$
+
+Demonstrate that you get the same answers as the R built in versions of these functions.
+
+```{r}
+x <- c(30,290,14,88,32,56)
+mean(x) # R's built in mean function 
+var(x) # R's built in variance function 
+```
+
+Hint: to get $n$ in the above equations you can use `length(x)`.
+
+## Part a (1 pt)
+
+This solution should be written using `for` loops to explicitly iterate through `x`.
+
+```{r}
+mean_for <- function(x) {
+  sum <- 0
+  for (value in x){
+    sum <- sum + value
+  }
+  mean = sum / length(x)  
+  return(mean)  
+}
+
+var_for <- function(x) {
+  mean = mean_for(x)
+  sum <- 0
+  for (value in x){
+  sum = sum + (value - mean)^2  
+  }
+  variance = sum/(length(x) - 1)
+  return (variance)
+}
+
+mean_for(x)
+var_for(x)
+```
+
+## Part b (1 pt)
+
+This solution should be written using the `map_dbl` and `reduce` functions to handle the iteration.
+
+```{r}
+mean_map <- function(x) {
+  sum = reduce(x, ~ .x+.y, init = 0)
+  mean = sum / length(x)
+  return(mean)
+}
+
+var_map <- function(x) {
+  mean = mean_map(x)
+  sum_vec = map_dbl(x, ~ (.x-mean)^2)
+  sum = reduce(sum_vec, ~ .x+.y, ini = 0)
+  var = sum/(length(x)-1)
+  return(var)
+}
+
+mean_map(x)
+var_map(x)
+```
+
+## Part c (1 pt)
+
+This solution should be written using R's vector math operations and R's `sum` function.
+
+```{r}
+mean_vec <- function(x) {
+  return(sum(x)/length(x))  
+}
+
+var_vec <- function(x) {
+  mean = mean_vec(x)
+  dis = x - mean
+  dis_sq = dis^2
+  var = sum(dis_sq)/(length(x)-1)
+  return(var)
+}
+
+mean_vec(x)
+var_vec(x)
+```
+
+## Part d (1 pt)
+
+Using any method of calculating $\bar X_n$ and $S_n$, write a function that computes the standardized mean of a sample (also known as the Z-score):
+$$Z_n = \frac{\bar X_n}{\sqrt{S^2} / \sqrt{n}}$$
+
+Demonstrate your function applied to the vector `x` defined for this problem. 
+
+```{r}
+mean_vec <- function(x) {
+  return(sum(x)/length(x))  
+}
+
+var_vec <- function(x) {
+  mean = mean_vec(x)
+  dis = x - mean
+  dis_sq = dis^2
+  var = sum(dis_sq)/(length(x)-1)
+  return(var)
+}
+
+z_score <- function(x) {
+  mean = mean_vec(x)
+  var = var_vec(x)
+  z = mean / (sqrt(var)/sqrt(length(x)))
+  return(z)
+}
+
+z_score(x)
+```
+
+## Problem 3 (4 pts)
+
+Spotify publishes an [API for playlists, tracks, and user data](https://developer.spotify.com/documentation/web-api/). I've already retrieved some data from Spotify, included in the the `tracks.rda` file included with this homework. One neat aspect of Spotify's data is the [audio features](https://developer.spotify.com/documentation/web-api/reference/tracks/get-several-audio-features/). These features rate tracks on many qualities such as "danceability" or whether the track seems to be "acoustic." We will investigate the relationships between these qualities for nearly 1000 tracks.
+
+To use the data, place `tracks.rda` in the same directory as this file. Before knitting this file, use the `Session -> Set Working Directory -> To Source File Location` menu so that following line will load the data and display a few of the columns in the table.
+```{r}
+load("tracks.rda")
+knitr::kable(tracks[c(1,2,335), c("track.album.name", "track.name", "danceability", "energy", "key", "loudness", "mode")])
+```
+
+```{r}
+dim(tracks)
+```
+### Part a (2 pt)
+
+We'll start by just getting a feeling for the data by answering the following questions.
+
+- What is the mean danceability score of all tracks?
+- For tracks with danceability above the mean, what is the median duration?
+- For each key, summarize mean loudness level? (Hint: use the `group_by` and `summarize` functions.)
+
+```{r}
+dance = tracks[c(1:967),c("danceability")]
+paste("mean danceability is ", mean(dance))
+
+new.track <- filter(tracks,dance>mean(dance))
+paste("median duration is", median(new.track[["track.duration_ms"]]))
+
+data = group_by(tracks[("loudness")],tracks[("key")])
+summ = summarise_all(data,mean)
+paste("mean loudness for each key is ",view(summ))
+```
+### Part b (2 pt)
+
+Since tracks can have multiple artists, the "track.artists" column is composed of lists with information on each artist that contributes to the track. To make display a little easier, your first task is to create a new column for the `tracks` that just display's all the artists as a single bit of text. To demonstrate your results, create the previous table with the addition of the artist names. 
+
+Some useful functions:
+
+- `mutate` will return a new table with one or more new columns added
+- `map_chr` will iterate across a list or vector and return text ("character vector" in R terminology). ([More information on `map` functions](https://r4ds.had.co.nz/iteration.html#the-map-functions).)
+- `paste` will join its arguments into a single character vector. See the `collapse` argument in particular.
+
+```{r}
+art <- tracks["track.album.artists"]
+ls <- art[[1]]
+lst1 <- map(ls, ~ .x[[3]],paste)
+track2 <- mutate(tracks,lst1)
+```
+
+
