@@ -1,0 +1,185 @@
+---
+title: "Homework 6"
+author: "Jiawei Hao, hjiawei"
+date: "Due Oct. 12 at midnight"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(3910349)
+library(tidyverse)
+```
+
+## Question 1 (5 points)
+
+Continuing our use of the Laplace distribution, we will use it as a candidate distribution for the standard Normal $N(0,1)$ distribution using an accept-reject algorithm.
+
+Recall that the probability distribution for a standard Normal is given by:
+
+$$f(x) = \frac{1}{\sqrt{2 \pi}} \exp\left\{ - \frac{x^2}{2} \right\}$$
+
+and the Laplace is given by
+$$g(x) = \frac{1}{2} \exp\left\{- |x| \right\}$$
+
+### Part (a) (1 pt)
+
+Analytically (i.e., pen and paper, not computation), find a constant $c$ such that:
+$$ \frac{c g(x)}{f(x)} \ge 1$$
+for all $x \in (-\infty, \infty)$. As we have frequently done, it may be helpful to consider $x < 0$ and $x \ge 0$ separately.
+
+**Answer**: By moving terms, we can get $c \ge \frac{f(x)}{g(x)}$. We then can get $c \ge \frac{2}{\sqrt{2\pi}}e^{-\frac{x^2}{2}+x}$ for $x \ge 0$ and $c \ge \frac{2}{\sqrt{2\pi}}e^{-\frac{x^2}{2}-x}$ for $x < 0$. If we take the derivative of each, we find functions peak at $x=1$ and $x=-1$. Plug these values back in, we got $f(x)=1.315489$ for both since both functions symmetrical at $x=0$. Thus, $c=1.315489$ such that $\frac{c g(x)}{f(x)} \ge 1$.  
+
+### Part (b) (2 pt)
+
+Implement an accept-reject algorithm for standard Normals using $c$ and our usual source of Laplace random variables.
+
+```{r}
+rlaplace <- function(n, mean = 0) {
+  s <- 2 * rbinom(n, size = 1, p = 0.5) - 1
+  m <- rexp(n) 
+  s * m + mean
+}
+
+dplace <- function(n){
+  0.5*exp(-abs(n))
+}
+k <- 10000
+c <- 1.315489
+
+dlaplace <- dplace(rlaplace(k))
+dnorm <- dnorm(dlaplace)
+ratios <- dnorm/(c*dlaplace)
+
+us <- runif(10000)
+accept_g <- us < ratios
+accepted_g <- dlaplace[accept_g]
+```
+
+
+Using 1000 samples, verify that your Accept-Reject algorithm works using a QQ-plot (see `geom_qq`).
+
+```{r}
+ggplot(data.frame(x = accepted_g),aes(sample = x)) + geom_qq() + geom_qq_line()
+```  
+
+### Part (c) (2 pt)
+
+Now implement an importance sampling algorithm for standard Normals using the Laplace distribution as the envelope distribution in order to estimate
+
+$$E(X^2)$$
+where $X \sim N(0, 1)$. Use 1000 samples and provide a 95\% confidence interval for $E(X^2)$.
+```{r}
+k1 <- 1000
+x_square <- rlaplace(k1)
+dlaplace1 <- dplace(x_square)
+dnorm1 <- dnorm(x_square)
+expectation <- mean((x_square)^2*dnorm1/dlaplace1)
+t.test(x_square*dnorm1/dlaplace1, conf.level = 0.95)$conf.int
+```
+
+## Question 2 (4 pts)
+
+Consider the density (known up to a constant) given by:
+
+$$f(x) \propto \sin(\pi  x^2), \quad 0 < x < 1$$
+
+```{r}
+curve(sin(pi * x^2), ylab = "f*(x)")
+```
+
+### Part (a) (2 pts)
+
+We want to estimate $E(X)$ using importance sampling (resampling).
+
+Using a uniform [0, 1] distribution as the envelope, use (reweighted) importance sampling to estimate $E(X)$. Estimate the variance of the **estimator** (we'll compare it to another estimator in part (b)).
+
+```{r}
+f <- function(x){
+  sin(pi*x^2)
+}
+
+k2 <- 10000
+hs <- runif(k2)
+fs <- dunif(hs)
+gs <- f(hs)
+samplings <- gs/fs
+estimate <- mean(gs/fs)
+
+omegas <- samplings/sum(samplings)
+reweighted <- hs * (k2 * omegas)
+mean(reweighted) #variance
+```
+
+### Part (b) (2 pt)
+
+The uniform distribution is a special case of the [Beta distribution](https://en.wikipedia.org/wiki/Beta_distribution) with parameters $\alpha = \beta = 1$. It works as an envelope, but it does not very carefully follow the target function: 
+$$E(X) \propto \int_0^1 x \sin(\pi x^2) \, dx$$
+```{r}
+curve(x * sin(pi * x^2))
+```
+
+Propose a set of parameters $\alpha$ and $\beta$ that leads to a better envelope distribution. Use this distribution (see the `rbeta` function) to implement importance sampling to estimate $E(X)$ and the variance of the estimator. Did this estimator have lower variance than the estimator based on the uniform candidate?
+
+Useful tip: A Beta($\alpha, \beta$) with $\alpha > 1$ and $\beta > 1$ will have a mode at $(\alpha - 1) / (\alpha + \beta - 2)$. This can be useful to graph candidate distributions against the target:  
+
+**Answer**: Propose that $\alpha = 2$ and $\beta = \frac{1.24}{0.76}$ since this way the distribution will have a mode of 0.76, which is similar to our target function. Then we have: 
+
+```{r}
+f <- function(x){
+  x*sin(pi*x^2)
+}
+
+k3 <- 10000
+hs1 <- rbeta(k3, 2, 1.24/0.76)
+fs1 <- dbeta(hs, 2, 1.24/0.76)
+gs1 <- f(hs)
+samplings_beta <- gs/fs
+estimate_beta <- mean(gs/fs)
+
+omegas_beta <- samplings_beta/sum(samplings_beta)
+reweighted_beta <- hs1 * (k3 * omegas_beta)
+mean(reweighted_beta) #variance
+
+```  
+**Answer**: My uniform estimator has a approximate variance of 0.63 and my beta estimator has a approximate variance of 0.55. So beta distribution with $\alpha = 2$ and $\beta = \frac{1.24}{0.76}$ is a better envelop since its variance is smaller. 
+
+```{r}
+## target function has a mode at approximately 0.76
+target_height <- 0.76 * sin(pi * 0.76^2)
+
+## candidate beta distribution alpha = beta = 2, so a mode at 1/2
+cand_height <- dbeta(0.76, 2, 1/0.76)
+cand_height1 <- dbeta(0.76, 3, 1.24/0.76)
+cand_height2 <- dbeta(0.76, 1.1, (0.9*0.76+0.1)/0.76)
+
+tc_ratio <- target_height/cand_height
+tc_ratio1 <- target_height/cand_height1
+tc_ratio2 <- target_height/cand_height2
+
+curve(x * sin(pi * x^2))
+curve(tc_ratio * dbeta(x, 2, 1/0.76), add = TRUE, col = "red")
+curve(tc_ratio * dbeta(x, 3, 1.24/0.76), add = TRUE, col = "blue")
+curve(tc_ratio * dbeta(x, 1.1, (0.9*0.76+0.1)/0.76), add = TRUE, col = "green")
+```
+
+
+## Question 3 (1 pts)
+
+It is time to start thinking about research projects. The core research question drives what data are required, what methods are considered, appropriate visualizations, etc. 
+
+Do one of the following:
+
+1. Look at the three starter research projects available on Canvas. Pick one project and write a new research question based on the existing paper. It should be motivated by research questions in the paper, but not identical to it. Describe data that would help answer your research question.
+
+2. For a topic of your choice, write a research questions (three to four sentences total). The question should be clearly motivated and include a justification of who would be interested in your research results. Here is an example (unlike the example, you do not need give a specific model at this time, but the more specific the research question the better):
+
+> Political committees in the United States play a significant role in supporting candidates, lobbying for policies, and organizing citizens. Political committees may also support other political committees through monetary contributions. Modeling the structure of these contributions will better help citizens understand the connections between committees and the role of money in politics. In particular, do political committees allocate their contributions to other committees randomly or are the amounts of contributions specifically targeted in some way? Specifically, do contributions follow the well known Benford's law, a model describing the distribution of leading digits for many natural processes, or do they follow some other systematic pattern?
+
+Write a few sentences describing an ideal data source. What kinds of variables are required? Do you need data collected from a specific location or time? Do you need observations over time or space? Does this data support any other interesting research questions?
+
+> Example: To see if Benford's law holds, I require data showing how much money political comittees spend on other political committees. I would like to have data over multiple years so I can also compare it to changes in legislation that may result in changes in the amounts of money donated. I would like to have variables describing the political committees such as if they have a lobbying group or are aligned with a particular political party. Since these data describe relationships among committees, this network could also be analyzed to learn about connections between the committees.
+
+**Answer**: During the covid-19 pandemic, almost all neighborhoods are affected by the spread of covid-19. Real estate business is deeply affected as well. For instance, New York City's apartment price fell a lot months after the beginning of the spread because people fled out of the city. But the price may eventually go back to where it was, or even higher in some regions as people decided to return. Therefore, many real estate investors would want to know whether an asset is still worthy for investment due to loss of population during covid-19 pandemic. In particular, how does population migration (moving in and out of a region) during the pandemic fluctuate the property prices in NYC? Do prices follow a same pattern or real estate in each smaller division of NYC behaves differently?
+
+To see the pattern, I need data showing the real estate property price changes in NYC and people's travel record. I would like to see over months between 2020 January and 2021 August, the amount of real estate listings and their corresponding prices published in NYC. I'd also like to classify them into downtown, middletown, and uptown region to see if they follow the same pattern. I'd like to see the flights and car travel data, more specifically, how many people come in and go out during pandemic period. These are all useful data to have for this research question. On a side note, these data may also be helpful in finding out tourist pattern in NYC during the pandemic as well. 
